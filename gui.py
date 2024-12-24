@@ -472,8 +472,8 @@ class KnotId:
         skeleton = KnotId.skeletonize(seg)
 
         G = KnotId.get_graph(skeleton)
-        KnotId.clean_graph(G)
-        KnotId.graph_3d(G)
+        G = KnotId.get_clean_graph(G)
+        G = KnotId.get_graph_3d(G)
 
         crossings = KnotId.get_crossings(G, image)
         crossings = KnotId.get_over_under(crossings)
@@ -617,8 +617,9 @@ class ImageViewer:
 
 
 if __name__ == "__main__":
-    img_dir = os.path.expanduser("../data/test")
-    out_dir = os.path.expanduser("../results/test")
+    direct = "test"
+    img_dir = os.path.expanduser(f"../data/{direct}")
+    out_dir = os.path.expanduser(f"../results/{direct}")
 
     image_files = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.lower().endswith((".png", ".jpg", ".jpeg"))])
 
