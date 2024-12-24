@@ -300,13 +300,7 @@ class KnotId:
                 errors.append((deg, node))
 
         err_num = len(errors)
-        if err_num>0:
-            print(err_num, "errors in the graphing")
-            print(errors)
-            return 1
-        else:
-            print("No apparent Errors in Graph")
-            return 0
+        return False if err_num == 0 else True
 
     def get_crossings(G, img):    
         def opposite_pair(n):
@@ -321,7 +315,7 @@ class KnotId:
                     over = 0
                     for j in range(3):
                         if i == j:
-                            pass
+                            continue
 
                         y_pred = m*n[j+1][0]+b
                         
@@ -331,7 +325,7 @@ class KnotId:
                     over = 0
                     for j in range(3):
                         if i == j:
-                            pass
+                            continue
                         if n[j+1][0] > n0[0]:
                             over += 1
                 
@@ -475,19 +469,32 @@ class KnotId:
         G = KnotId.get_clean_graph(G)
         G = KnotId.get_graph_3d(G)
 
+        if KnotId.check_graph(G):
+            return 0
+
         crossings = KnotId.get_crossings(G, image)
         crossings = KnotId.get_over_under(crossings)
+
+        for cross in crossings:
+            if cross[-1] == 2:
+                return 0
 
         KnotId.graph_3d_crossings(G, crossings)
         pts = KnotId.get_graph_to_array(G)
 
-        knotid = KnotId.get_knotid(pts)
+        try:
+            knotid = KnotId.get_knotid(pts)
+        except:
+            knotid = 0
 
         return knotid
     
     def group_knots_identify(imgs):
         graphs = []
         crosses = []
+
+        holy_cross = []
+        shapes = []
         
         for image in imgs:
             seg = KnotId.segment(image)
@@ -497,15 +504,16 @@ class KnotId:
             G = KnotId.get_clean_graph(G)
             G = KnotId.get_graph_3d(G)
 
+            if KnotId.check_graph(G):
+                graphs.append('e')
+                crosses.append('e')
+                shapes.append('e')
+
+                continue 
+
             crossings = KnotId.get_crossings(G, image)
 
             graphs.append(G)
-            crosses.append(crossings)
-
-        holy_cross = []
-        shapes = []
-
-        for crossings in crosses:
             shapes.append(len(crossings))
             holy_cross.extend(crossings)
         
@@ -514,21 +522,38 @@ class KnotId:
         idx = 0
 
         for sz in shapes:
-            crosses.append(holy_cross[idx:idx+sz])
+            if sz == 'e':
+                crosses.append('e')
+                continue
+
+            idx_prev = idx
             idx += sz
+            for cross in holy_cross[idx_prev:idx]:
+                if cross[-1] == 2: 
+                    crosses.append('e')
+                    continue
+
+            crosses.append(holy_cross[idx_prev:idx])
 
         knotIds = []
         for i in range(len(graphs)):
             G = graphs[i]
             crossings = crosses[i]
 
-            KnotId.graph_3d_crossings(G, crossings)
-            pts = KnotId.get_graph_to_array(G)
+            if G == 'e' or crossings == 'e':
+                knotIds.append('e')
+                continue
 
-            knotid = KnotId.get_knotid(pts)
+            try:
+                KnotId.graph_3d_crossings(G, crossings)
+                pts = KnotId.get_graph_to_array(G)
 
-            knotIds.append(knotid)
-        
+                knotid = KnotId.get_knotid(pts)
+
+                knotIds.append(knotid)
+            except:
+                knotIds.append('e')
+
         return knotIds
 
 
