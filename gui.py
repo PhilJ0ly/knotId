@@ -15,7 +15,6 @@ from skimage.color import rgb2gray
 from skimage.segmentation import watershed
 from skimage import morphology
 
-
 class KnotId:    
     def segment(img):
         img_gray = rgb2gray(img)
@@ -34,7 +33,7 @@ class KnotId:
     def skeletonize(seg):
         skeleton = morphology.skeletonize(seg)
         return skeleton
-    
+
     def get_graph(skeleton):
         G = nx.Graph()
         rows, cols = skeleton.shape
@@ -60,25 +59,10 @@ class KnotId:
                     nr, nc = r + dr, c + dc
                     if (nr, nc) in G.nodes():
                         G.add_edge((r, c), (nr, nc))
-                
+    
         return G
     
-    def clean_graph(G, scale=1):
-
-        structs = list(nx.connected_components(G))
-        largest_struct = max(structs, key=len)
-        G = G.subgraph(largest_struct).copy()
-
-        # scale = 1 # scaling factor to adjust for picture resolution (1 for example_1.png)
-
-        remove_loops(G, scale*5)
-        for i in range(5):
-            remove_unconnected(G, scale*2*(i+1))
-        connect_int(G, scale*15)
-        tying_loose_ends(G, scale*30)
-        connect_int(G, scale*25)
-        remove_unconnected(G, scale*25)
-
+    def get_clean_graph(G, scale=1):
         # Remove small loops
         def search_loop(G, init_node, prev_node, node, count, limit):
             if node == init_node:
@@ -278,7 +262,24 @@ class KnotId:
 
             return match_closest(closests, distances, new_singles)  
 
-    def graph_3d(G):
+        
+        structs = list(nx.connected_components(G))
+        largest_struct = max(structs, key=len)
+        G = G.subgraph(largest_struct).copy()
+
+        # scale = 1 # scaling factor to adjust for picture resolution (1 for example_1.png)
+
+        remove_loops(G, scale*5)
+        for i in range(5):
+            remove_unconnected(G, scale*2*(i+1))
+        connect_int(G, scale*15)
+        tying_loose_ends(G, scale*30)
+        connect_int(G, scale*25)
+        remove_unconnected(G, scale*25)
+
+        return G
+
+    def get_graph_3d(G):
         for node in list(G.nodes):
             r, c = node
             G = nx.relabel_nodes(G, {node: (r, c, 0)})
@@ -288,6 +289,8 @@ class KnotId:
         for edge in edges:
             node1, node2 = edge
             G.add_edge((node1[0], node1[1], 0), (node2[0], node2[1], 0))
+        
+        return G
     
     def check_graph(G):
         errors = []
@@ -349,43 +352,39 @@ class KnotId:
             min_x, max_x = min(x_coords), max(x_coords)
             min_y, max_y = min(y_coords), max(y_coords)
 
-            # Adjust the size of the square if neighbors don’t fit
             square_size = max(c, max(max_x - min_x, max_y - min_y) + 2 * r)
 
-            # Define the square boundaries
             square_left = int(max(0, node[0] - square_size))
-            square_right = int(min(img.shape[1], node[0] + square_size))
+            square_right = int(min(img.size[1], node[0] + square_size))
             square_bottom = int(max(0, node[1] - square_size))
-            square_top = int(min(img.shape[0], node[1] + square_size))
+            square_top = int(min(img.size[0], node[1] + square_size))
 
             # Crop the image to the square boundaries
-            img_cropped = img[square_bottom:square_top, square_left:square_right]
-            pil_img = Image.fromarray(img_cropped)
+            img_array = np.array(img)
+            img_cropped = img_array[square_left:square_right, square_bottom:square_top]
+            img = Image.fromarray(img_cropped)
 
-            # Draw on the cropped image
-            draw = ImageDraw.Draw(pil_img)
+            draw = ImageDraw.Draw(img)
             offset_x, offset_y = square_left, square_bottom
 
             # Draw neighbors
             for n in range(2):
-                # Red neighbors
                 draw.ellipse([
                     (pairs[0][n][0] - r - offset_x, pairs[0][n][1] - r - offset_y),
                     (pairs[0][n][0] + r - offset_x, pairs[0][n][1] + r - offset_y)
                 ], fill="red")
-                # Blue neighbors
+
                 draw.ellipse([
                     (pairs[1][n][0] - r - offset_x, pairs[1][n][1] - r - offset_y),
                     (pairs[1][n][0] + r - offset_x, pairs[1][n][1] + r - offset_y)
                 ], fill="blue")
 
-            # Draw the node
             draw.ellipse([
                 (node[0] - r - offset_x, node[1] - r - offset_y),
                 (node[0] + r - offset_x, node[1] + r - offset_y)
             ], fill="black")
 
-            return pil_img
+            return img
 
         crossings = []
         for node in G.nodes:
@@ -395,7 +394,7 @@ class KnotId:
                 crossings.append([
                     node, 
                     (p1, p2), 
-                    show_crossings(node[0], (p1, p2), img, 1, 15),
+                    show_crossings(node, (p1, p2), img, 1, 15),
                     0
                 ])
 
@@ -411,7 +410,7 @@ class KnotId:
             blue_ups = collected_states
 
         root = tk.Tk()
-        viewer = ImageViewer(root, crossings[2], callback)
+        viewer = ImageViewer(root, [cross[2] for cross in crossings], callback)
         root.mainloop()
 
         for i in range(len(crossings)):
@@ -495,8 +494,8 @@ class KnotId:
             skeleton = KnotId.skeletonize(seg)
 
             G = KnotId.get_graph(skeleton)
-            KnotId.clean_graph(G)
-            KnotId.graph_3d(G)
+            G = KnotId.get_clean_graph(G)
+            G = KnotId.get_graph_3d(G)
 
             crossings = KnotId.get_crossings(G, image)
 
@@ -513,6 +512,7 @@ class KnotId:
         holy_cross = KnotId.get_over_under(holy_cross)
         crosses = []
         idx = 0
+
         for sz in shapes:
             crosses.append(holy_cross[idx:idx+sz])
             idx += sz
@@ -560,9 +560,9 @@ class ImageViewer:
         self.next_button = Button(root, text="Next", command=self.show_next_image)
         self.next_button.pack(side=tk.RIGHT, padx=20, pady=10)
 
-        # Radio button for on/off state
-        self.radio_on = Radiobutton(root, text="On", variable=self.radio_states[self.current_index], value=1, command=self.update_radio_state)
-        self.radio_off = Radiobutton(root, text="Off", variable=self.radio_states[self.current_index], value=0, command=self.update_radio_state)
+        # Radio button for Blue/Red state
+        self.radio_on = Radiobutton(root, text="Blue", variable=self.radio_states[self.current_index], value=1, command=self.update_radio_state)
+        self.radio_off = Radiobutton(root, text="Red", variable=self.radio_states[self.current_index], value=0, command=self.update_radio_state)
         self.radio_on.pack(side=tk.LEFT, padx=10, pady=10)
         self.radio_off.pack(side=tk.LEFT, padx=10, pady=10)
 
@@ -570,10 +570,11 @@ class ImageViewer:
         self.submit_button = Button(root, text="Submit", command=self.submit_states)
         self.submit_button.pack(side=tk.BOTTOM, pady=20)
 
-        # Keyboard bindings for arrow keys
+        # Keyboard bindings
         root.bind('<Left>', lambda event: self.show_previous_image())
         root.bind('<Right>', lambda event: self.show_next_image())
         root.bind('<Up>', lambda event: self.toggle_radio_state())
+        root.bind('<Return>', lambda event: self.submit_states())
 
         # Load the first image
         self.update_image()
@@ -616,12 +617,12 @@ class ImageViewer:
 
 
 if __name__ == "__main__":
-    img_dir = os.path.expanduser("./knotid/examples")
-    out_dir = os.path.expanduser("./knotid/results")
+    img_dir = os.path.expanduser("../data/test")
+    out_dir = os.path.expanduser("../results/test")
 
     image_files = sorted([os.path.join(img_dir, f) for f in os.listdir(img_dir) if f.lower().endswith((".png", ".jpg", ".jpeg"))])
 
-    images = [Image.open(f) for f in image_files]
+    images = [Image.open(f).convert("RGB") for f in image_files]
     filenames = [os.path.basename(f) for f in image_files]
 
     knot_ids = KnotId.group_knots_identify(images)
@@ -638,18 +639,4 @@ if __name__ == "__main__":
     df.to_csv(csv_pth, index=False)
 
     print(f"{len(knot_ids)} Knot IDs saved to {csv_pth}")
-
-
-# if __name__ == "__main__":
-#     from PIL import Image
-
-#     # Example usage with a list of PIL images
-#     image_list = [
-#         Image.new("RGB", (800, 600), "red"),
-#         Image.new("RGB", (800, 600), "green"),
-#         Image.new("RGB", (800, 600), "blue")
-#     ]
-
-#     # Get the states after the user interacts with the GUI
-#     user_states = get_image_states(image_list)
-#     print("Final states:", user_states)
+    
