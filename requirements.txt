@@ -1,0 +1,10 @@
+matplotlib
+numpy
+scikit-image
+scipy
+opencv-python
+pyknotid
+networkx
+pillow
+pandas
+tkinter
