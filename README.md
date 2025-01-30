@@ -2,6 +2,10 @@
 
 This is an effort to identify the reduced knot from a picture of a closed loop of string. It involves segmentation, skeletonization, crossing identification, crossing characterization, conversion to a 3D graph of the knot, and the knot reduction.
 
+## Usage
+Install [requirements](./requirements.txt). Open [gui.py](./gui.py), change the input and output images' directories and run file. In the GUI, choose the top branch color (key bindings are outlined in the script). Note that the success of the run depends heavily on the parameters used and the properties of the input images. Tweek these values in the notebooks to see what works best for your data and than use them in the main [gui.py](./gui.py). You can also try to change segmentation algorithm to fit your data (a few are proposed in [segmentation.ipynb](./segmentation.ipynb)). 
+
+## Outline
 The process starts with a picture of some closed loop of rope.
 
 <p align="center">
